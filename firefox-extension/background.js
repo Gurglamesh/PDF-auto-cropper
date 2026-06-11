@@ -15,8 +15,18 @@ let _processedBytes = null;  // Uint8Array of the cropped output PDF
 
 browser.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'CROP_CURRENT_TAB') return cropCurrentTab();
+  if (msg.type === 'CROP_BYTES')       return cropBytes(msg.bytes);
   if (msg.type === 'GET_PDF')          return Promise.resolve({ bytes: _processedBytes });
 });
+
+// ── crop from raw bytes (file picker — works for local files) ───────────────────
+
+async function cropBytes(buffer) {
+  const srcBytes  = new Uint8Array(buffer);
+  _processedBytes = await cropToLabels(srcBytes);
+  await browser.tabs.create({ url: browser.runtime.getURL('viewer.html') });
+  return { ok: true };
+}
 
 // ── main flow ─────────────────────────────────────────────────────────────────
 
@@ -110,6 +120,10 @@ async function cropToLabels(srcBytes) {
     const [embedded] = await outDoc.embedPages([srcDoc.getPage(i)], clipBox);
     const outPage    = outDoc.addPage([TARGET_W, TARGET_H]);
     outPage.drawPage(embedded, { x: 0, y: 0, width: TARGET_W, height: TARGET_H });
+  }
+
+  if (outDoc.getPageCount() === 0) {
+    throw new Error('No label content detected (the page may be blank).');
   }
 
   return outDoc.save();
