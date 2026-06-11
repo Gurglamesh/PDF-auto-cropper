@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Label Cropper</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1e1e;
+      color: #ddd;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 48px;
+      gap: 18px;
+    }
+
+    header { display: flex; align-items: center; gap: 12px; }
+    header img { width: 34px; height: 34px; }
+    header h1  { font-size: 20px; font-weight: 600; }
+
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    button {
+      padding: 11px 22px;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #pickBtn  { background: #4a90d9; color: #fff; }
+    #pickBtn:hover  { background: #357abd; }
+    #srcBtn   { background: #333; color: #ccc; }
+    #srcBtn:hover { background: #444; }
+    #printBtn { background: #27ae60; color: #fff; padding: 12px 44px; font-size: 15px; }
+    #printBtn:hover:not(:disabled) { background: #1e8449; }
+    #printBtn:disabled { background: #2a2a2a; color: #555; cursor: default; }
+
+    #status { font-size: 13px; color: #888; min-height: 18px; text-align: center; }
+    #status.ok    { color: #5dba7a; }
+    #status.warn  { color: #d4a44a; }
+    #status.error { color: #e06060; }
+
+    #pages {
+      display: flex; flex-wrap: wrap; gap: 16px;
+      align-items: flex-start; justify-content: center; width: 100%;
+    }
+    .page-wrap {
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      width: 280px; aspect-ratio: 95 / 178;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .page-wrap canvas { width: 100%; height: 100%; display: block; }
+
+    .hint { font-size: 11px; color: #555; }
+    input[type="file"] { display: none; }
+
+    .spinner {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.25); border-top-color: #4a90d9;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 7px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon.svg" alt="">
+    <h1>Label Cropper</h1>
+  </header>
+
+  <div class="controls">
+    <button id="pickBtn">Choose PDF &amp; Crop</button>
+    <button id="srcBtn" style="display:none">Crop the PDF I came from</button>
+  </div>
+
+  <div id="status">Choose a label PDF to crop it to 95×178&nbsp;mm.</div>
+
+  <div id="pages"></div>
+
+  <button id="printBtn" disabled>Print Label</button>
+  <p class="hint">Opens the cropped PDF — pick your label printer in the print dialog</p>
+
+  <input type="file" id="fileInput" accept="application/pdf,.pdf">
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="lib/pdf-lib.min.js"></script>
+  <script src="crop.js"></script>
+  <script src="cropper.js"></script>
+</body>
+</html>
