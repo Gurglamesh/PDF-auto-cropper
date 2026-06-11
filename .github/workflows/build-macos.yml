@@ -1,0 +1,47 @@
+name: Build macOS (Apple Silicon)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Upload to existing release tag (e.g. v1.0.0) — leave blank to only save as artifact'
+        required: false
+
+jobs:
+  build:
+    runs-on: macos-latest   # Apple Silicon (M-series)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pymupdf numpy pillow pyinstaller
+
+      - name: Build .app bundle
+        run: |
+          pyinstaller \
+            --windowed \
+            --name "LabelCropper" \
+            --collect-all pymupdf \
+            app.py
+
+      - name: Zip .app
+        run: |
+          cd dist
+          zip -r LabelCropper-macOS-arm64.zip LabelCropper.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LabelCropper-macOS-arm64
+          path: dist/LabelCropper-macOS-arm64.zip
+
+      - name: Attach to release
+        if: ${{ github.event.inputs.release_tag != '' }}
+        run: gh release upload "${{ github.event.inputs.release_tag }}" dist/LabelCropper-macOS-arm64.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

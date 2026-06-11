@@ -11,6 +11,7 @@ Usage:
 
 import os
 import sys
+import subprocess
 import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -162,10 +163,12 @@ class App(tk.Tk):
 
     def _draw_placeholder(self):
         cx, cy = PREVIEW_W_PX // 2, PREVIEW_H_PX // 2
+        emoji_font = "Apple Color Emoji" if sys.platform == "darwin" else "Segoe UI Emoji"
+        body_font  = "Helvetica"         if sys.platform == "darwin" else "Segoe UI"
         self._canvas.create_text(cx, cy - 16, text="📄",
-                                 font=("Segoe UI Emoji", 28), fill=FG_DIM, tags="ph")
+                                 font=(emoji_font, 28), fill=FG_DIM, tags="ph")
         self._canvas.create_text(cx, cy + 22, text="Click to open a PDF",
-                                 font=("Segoe UI", 10), fill=FG_DIM, tags="ph")
+                                 font=(body_font, 10), fill=FG_DIM, tags="ph")
 
     # ── actions ───────────────────────────────────────────────────────────────
 
@@ -259,7 +262,12 @@ class App(tk.Tk):
         self._tmp = tmp
         self._status.set("Opening print dialog…")
         try:
-            os.startfile(tmp, "print")
+            if sys.platform == "win32":
+                os.startfile(tmp, "print")
+            elif sys.platform == "darwin":
+                subprocess.run(["open", tmp], check=True)   # opens in Preview → Cmd+P
+            else:
+                subprocess.run(["xdg-open", tmp], check=True)
         except Exception as exc:
             messagebox.showerror("Print error", str(exc))
             self._status.set("Print failed.")
