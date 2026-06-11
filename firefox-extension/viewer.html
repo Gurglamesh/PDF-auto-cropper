@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Label Cropper — Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1e1e1e;
+      color: #ddd;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    header img { width: 32px; height: 32px; }
+    header h1  { font-size: 18px; font-weight: 600; }
+
+    #statusBar {
+      font-size: 13px;
+      color: #888;
+    }
+    #statusBar.error { color: #e06060; }
+
+    /* ── preview area ── */
+    #pages {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      align-items: center;
+      width: 100%;
+    }
+
+    .page-wrap {
+      background: white;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      /* fixed display width for the label; aspect ratio 95:178 */
+      width: min(300px, 80vw);
+      aspect-ratio: 95 / 178;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .page-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ── print button ── */
+    #printBtn {
+      padding: 12px 40px;
+      background: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      letter-spacing: 0.02em;
+    }
+    #printBtn:hover:not(:disabled) { background: #1e8449; }
+    #printBtn:disabled { background: #333; color: #666; cursor: default; }
+
+    .hint {
+      font-size: 11px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="icons/icon.svg" alt="">
+    <h1>Label Cropper</h1>
+  </header>
+
+  <div id="statusBar">Loading…</div>
+
+  <div id="pages"></div>
+
+  <button id="printBtn" disabled>Print Label</button>
+  <p class="hint">Opens your PDF viewer — select your label printer there</p>
+
+  <script src="lib/pdf.min.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "manifest_version": 2,
+  "name": "Label Cropper",
+  "version": "1.0",
+  "description": "Auto-crops shipment label PDFs to 95×178 mm. Click the icon on any PDF tab to crop and print.",
+
+  "permissions": ["activeTab", "<all_urls>", "tabs"],
+
+  "background": {
+    "scripts": ["lib/pdf.min.js", "lib/pdf-lib.min.js", "background.js"]
+  },
+
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Crop Label",
+    "default_icon": {
+      "48": "icons/icon.svg",
+      "96": "icons/icon.svg"
+    }
+  },
+
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "label-cropper@gurglamesh",
+      "strict_min_version": "109.0"
+    }
+  }
+}
