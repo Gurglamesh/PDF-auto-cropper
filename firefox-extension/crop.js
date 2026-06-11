@@ -1,26 +1,26 @@
 // crop.js — shared PDF detection + cropping logic (runs in the cropper page)
+//
+// Works in rendered-image space: each page is rasterised with PDF.js (which
+// already honours any /Rotate on the page), the content bounding box is found,
+// the crop is rotated to portrait if it came out landscape, then it's placed on
+// a 95×178 mm page preserving aspect ratio. Rasterising sidesteps the fragile
+// coordinate maths that broke on rotated pages.
 
 const MM_TO_PT   = 72 / 25.4;
-const TARGET_W   = 95  * MM_TO_PT;   // ~269.3 pt
-const TARGET_H   = 178 * MM_TO_PT;   // ~504.1 pt
-const PAD        = 2   * MM_TO_PT;   // 2 mm padding
-const DETECT_DPI = 150;
-const WHITE_THR  = 245;
+const TARGET_W   = 95  * MM_TO_PT;   // ~269.3 pt — portrait label width
+const TARGET_H   = 178 * MM_TO_PT;   // ~504.1 pt — portrait label height
+const PAD_MM     = 2;                // padding around detected content, in mm
+const RENDER_DPI = 300;              // raster resolution (crisp barcodes)
+const WHITE_THR  = 245;              // pixels >= this on all channels = background
 
-// Detect the bounding box of non-white content on a PDF.js page.
-async function detectBounds(pdfJsPage) {
-  const scale = DETECT_DPI / 72;
-  const vp    = pdfJsPage.getViewport({ scale });
+// If a landscape crop must be rotated to portrait, which way to turn it.
+// Flip to false if labels come out upside-down.
+const ROTATE_CLOCKWISE = true;
 
-  const canvas  = document.createElement('canvas');
-  canvas.width  = Math.round(vp.width);
-  canvas.height = Math.round(vp.height);
-  const ctx = canvas.getContext('2d');
+// ── helpers ──────────────────────────────────────────────────────────────────
 
-  await pdfJsPage.render({ canvasContext: ctx, viewport: vp }).promise;
-
-  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
+function detectBoundsPx(ctx, width, height) {
+  const { data } = ctx.getImageData(0, 0, width, height);
   let minX = width, maxX = -1, minY = height, maxY = -1;
 
   for (let y = 0; y < height; y++) {
@@ -34,48 +34,93 @@ async function detectBounds(pdfJsPage) {
       }
     }
   }
-
   if (maxX < 0) return null;
-
-  // Convert canvas pixels (top-left origin) → PDF points (bottom-left origin)
-  const [vx0, vy0, vx1, vy1] = pdfJsPage.view;
-  const ptScale = 1 / scale;
-
-  return {
-    left:   minX       * ptScale + vx0,
-    right:  (maxX + 1) * ptScale + vx0,
-    top:    vy1 - minY       * ptScale,
-    bottom: vy1 - (maxY + 1) * ptScale,
-    pageX0: vx0, pageY0: vy0,
-    pageX1: vx1, pageY1: vy1,
-  };
+  return { minX, minY, maxX, maxY };
 }
 
-// Take source PDF bytes (Uint8Array) → cropped 95×178 mm PDF bytes (Uint8Array).
+function cropCanvas(src, x, y, w, h) {
+  const out = document.createElement('canvas');
+  out.width = w;
+  out.height = h;
+  out.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h);
+  return out;
+}
+
+function rotate90(src, clockwise) {
+  const out = document.createElement('canvas');
+  out.width = src.height;
+  out.height = src.width;
+  const ctx = out.getContext('2d');
+  if (clockwise) {
+    ctx.translate(src.height, 0);
+    ctx.rotate(Math.PI / 2);
+  } else {
+    ctx.translate(0, src.width);
+    ctx.rotate(-Math.PI / 2);
+  }
+  ctx.drawImage(src, 0, 0);
+  return out;
+}
+
+function canvasToPngBytes(canvas) {
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      resolve(new Uint8Array(await blob.arrayBuffer()));
+    }, 'image/png');
+  });
+}
+
+// ── main ───────────────────────────────────────────────────────────────────────
+
 async function cropToLabels(srcBytes) {
   const { PDFDocument } = PDFLib;
 
   const pdfJsDoc = await pdfjsLib.getDocument({ data: srcBytes.slice() }).promise;
-  const srcDoc   = await PDFDocument.load(srcBytes.slice());
   const outDoc   = await PDFDocument.create();
+  const padPx    = Math.round(PAD_MM / 25.4 * RENDER_DPI);
 
-  for (let i = 0; i < pdfJsDoc.numPages; i++) {
-    const jPage  = await pdfJsDoc.getPage(i + 1);
-    const bounds = await detectBounds(jPage);
-    if (!bounds) continue;
+  for (let i = 1; i <= pdfJsDoc.numPages; i++) {
+    const page     = await pdfJsDoc.getPage(i);
+    const viewport = page.getViewport({ scale: RENDER_DPI / 72 });
 
-    const { left, right, top, bottom, pageX0, pageY0, pageX1, pageY1 } = bounds;
+    const canvas  = document.createElement('canvas');
+    canvas.width  = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d');
+    // White background so transparent PDFs scan/crop correctly
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
 
-    const clipBox = {
-      left:   Math.max(pageX0, left   - PAD),
-      right:  Math.min(pageX1, right  + PAD),
-      bottom: Math.max(pageY0, bottom - PAD),
-      top:    Math.min(pageY1, top    + PAD),
-    };
+    const b = detectBoundsPx(ctx, canvas.width, canvas.height);
+    if (!b) continue;
 
-    const [embedded] = await outDoc.embedPages([srcDoc.getPage(i)], clipBox);
-    const outPage    = outDoc.addPage([TARGET_W, TARGET_H]);
-    outPage.drawPage(embedded, { x: 0, y: 0, width: TARGET_W, height: TARGET_H });
+    const x = Math.max(0, b.minX - padPx);
+    const y = Math.max(0, b.minY - padPx);
+    const w = Math.min(canvas.width,  b.maxX + 1 + padPx) - x;
+    const h = Math.min(canvas.height, b.maxY + 1 + padPx) - y;
+
+    let crop = cropCanvas(canvas, x, y, w, h);
+
+    // Target is portrait; if the content is landscape, turn it upright.
+    if (crop.width > crop.height) {
+      crop = rotate90(crop, ROTATE_CLOCKWISE);
+    }
+
+    const pngBytes = await canvasToPngBytes(crop);
+    const img      = await outDoc.embedPng(pngBytes);
+
+    const outPage = outDoc.addPage([TARGET_W, TARGET_H]);
+    // Fit preserving aspect ratio, centred (no distortion)
+    const scale = Math.min(TARGET_W / img.width, TARGET_H / img.height);
+    const dw = img.width  * scale;
+    const dh = img.height * scale;
+    outPage.drawImage(img, {
+      x: (TARGET_W - dw) / 2,
+      y: (TARGET_H - dh) / 2,
+      width: dw,
+      height: dh,
+    });
   }
 
   if (outDoc.getPageCount() === 0) {
